@@ -91,6 +91,23 @@ def p_to_q(p_values, dist_params):
     return tf.tensordot(p_values, z, [[-1], [-1]])
 
 
+def p_to_q_and_q_stds(p_values, dist_params):
+    z, _ = build_z(**dist_params)
+    print(z, p_values)
+    bins = dist_params['nb_atoms']
+
+    # q_values is (batch, action)
+    q_values = tf.tensordot(p_values, z, [[-1], [-1]])
+
+    # q_values_ex is (batch, action, bins)
+    q_values_ex = tf.tile(tf.expand_dims(q_values, axis=-1),
+                          [1, 1, bins])
+    # q_stds is (batch, action)
+    q_stds = tf.reduce_sum(p_values * tf.square(q_values_ex - z), axis=-1)
+
+    return q_values, q_stds
+
+
 def pick_action(p_values, dist_params):
     q_values = p_to_q(p_values, dist_params)
     deterministic_actions = tf.argmax(q_values, axis=1)
@@ -225,7 +242,7 @@ def build_train(make_obs_ph, p_dist_func, num_actions, optimizer, grad_norm_clip
         # =====================================================================================
         # q network evaluation
         p_t = p_dist_func(obs_t_input.get(), num_actions, dist_params['nb_atoms'], scope="q_func", reuse=True)  # reuse parameters from act
-        q_t = p_to_q(p_t, dist_params)  # reuse parameters from act
+        q_t, q_dist_stds = p_to_q_and_q_stds(p_t, dist_params)  # reuse parameters from act
         q_func_vars = U.scope_vars(U.absolute_scope_name("q_func"))
 
         # target q network evalution
@@ -234,11 +251,6 @@ def build_train(make_obs_ph, p_dist_func, num_actions, optimizer, grad_norm_clip
         target_q_func_vars = U.scope_vars(U.absolute_scope_name("target_q_func"))
 
         # TODO: use double
-
-        # XXX
-        Vmin = dist_params['Vmin']
-        _, dz = build_z(**dist_params)
-        max_p_t = tf.to_float(tf.argmax(p_t, axis=-1)) * dz + Vmin
 
         a_next = tf.argmax(q_tp1, 1, output_type=tf.int32)
         batch_dim = tf.shape(rew_t_ph)[0]
@@ -281,7 +293,7 @@ def build_train(make_obs_ph, p_dist_func, num_actions, optimizer, grad_norm_clip
                 done_mask_ph,
                 importance_weights_ph
             ],
-            outputs=[errors, max_p_t],
+            outputs=[errors, q_dist_stds],
             updates=[optimize_expr]
         )
         update_target = U.function([], [], updates=[update_target_expr])

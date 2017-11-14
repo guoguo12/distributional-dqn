@@ -276,11 +276,10 @@ def learn(env,
                 else:
                     obses_t, actions, rewards, obses_tp1, dones = replay_buffer.sample(batch_size)
                     weights, batch_idxes = np.ones_like(rewards), None
-                errors, max_p_t = train(obses_t, actions, rewards, obses_tp1, dones, weights)
+                errors, q_dist_stds = train(obses_t, actions, rewards, obses_tp1, dones, weights)
 
                 if prioritized_replay:
-#                    new_priorities = np.nan_to_num(np.abs(errors)) + prioritized_replay_eps
-                    new_priorities = np.nan_to_num(np.std(max_p_t, axis=-1)) + prioritized_replay_eps
+                    new_priorities = np.nan_to_num(np.mean(q_dist_stds, axis=-1)) + prioritized_replay_eps
                     replay_buffer.update_priorities(batch_idxes, new_priorities)
 
             if t > learning_starts and t % target_network_update_freq == 0:
