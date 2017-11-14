@@ -21,7 +21,7 @@ def main():
         learning_starts=10000,
         target_network_update_freq=1000,
         gamma=0.99,
-        prioritized_replay=False,
+        prioritized_replay=True,
         dist_params={'Vmin': -10, 'Vmax': 10, 'nb_atoms': 51}
     )
     act.save("pong_model.pkl")

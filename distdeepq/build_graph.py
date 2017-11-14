@@ -235,6 +235,11 @@ def build_train(make_obs_ph, p_dist_func, num_actions, optimizer, grad_norm_clip
 
         # TODO: use double
 
+        # XXX
+        Vmin = dist_params['Vmin']
+        _, dz = build_z(**dist_params)
+        max_p_t = tf.to_float(tf.argmax(p_t, axis=-1)) * dz + Vmin
+
         a_next = tf.argmax(q_tp1, 1, output_type=tf.int32)
         batch_dim = tf.shape(rew_t_ph)[0]
         ThTz, debug = build_categorical_alg(p_tp1, rew_t_ph, a_next, gamma, batch_dim, done_mask_ph, dist_params)
@@ -276,7 +281,7 @@ def build_train(make_obs_ph, p_dist_func, num_actions, optimizer, grad_norm_clip
                 done_mask_ph,
                 importance_weights_ph
             ],
-            outputs=mean_error,
+            outputs=[errors, max_p_t],
             updates=[optimize_expr]
         )
         update_target = U.function([], [], updates=[update_target_expr])
